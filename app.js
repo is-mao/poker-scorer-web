@@ -721,35 +721,109 @@ const App = {
     this.showModal('modal-draw');
   },
   
+  wheelColors: ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'],
+  
+  createWheel(names) {
+    const count = names.length;
+    const anglePerSegment = 360 / count;
+    const radius = 140;
+    const centerX = 150;
+    const centerY = 150;
+    
+    let segments = '';
+    let texts = '';
+    
+    names.forEach((name, i) => {
+      const startAngle = (i * anglePerSegment - 90) * Math.PI / 180;
+      const endAngle = ((i + 1) * anglePerSegment - 90) * Math.PI / 180;
+      
+      const x1 = centerX + radius * Math.cos(startAngle);
+      const y1 = centerY + radius * Math.sin(startAngle);
+      const x2 = centerX + radius * Math.cos(endAngle);
+      const y2 = centerY + radius * Math.sin(endAngle);
+      
+      const largeArc = anglePerSegment > 180 ? 1 : 0;
+      const color = this.wheelColors[i % this.wheelColors.length];
+      
+      segments += `<path d="M${centerX},${centerY} L${x1},${y1} A${radius},${radius} 0 ${largeArc},1 ${x2},${y2} Z" fill="${color}" stroke="#fff" stroke-width="2"/>`;
+      
+      const textAngle = ((i + 0.5) * anglePerSegment - 90) * Math.PI / 180;
+      const textRadius = radius * 0.65;
+      const textX = centerX + textRadius * Math.cos(textAngle);
+      const textY = centerY + textRadius * Math.sin(textAngle);
+      const textRotation = (i + 0.5) * anglePerSegment;
+      
+      const displayName = name.length > 4 ? name.substring(0, 4) + '..' : name;
+      
+      texts += `<text x="${textX}" y="${textY}" text-anchor="middle" dominant-baseline="middle" transform="rotate(${textRotation}, ${textX}, ${textY})" fill="#fff" font-size="14" font-weight="600" style="text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">${displayName}</text>`;
+    });
+    
+    const outerRing = `<circle cx="${centerX}" cy="${centerY}" r="${radius + 5}" fill="none" stroke="#d97706" stroke-width="8"/>`;
+    
+    return `
+      <div class="wheel-container">
+        <div class="wheel-pointer-container">
+          <svg width="30" height="30" viewBox="0 0 30 30">
+            <polygon points="15,30 0,0 30,0" fill="#dc2626"/>
+            <polygon points="15,26 4,4 26,4" fill="#ef4444"/>
+          </svg>
+        </div>
+        <svg class="wheel-svg" id="wheel" viewBox="0 0 300 300">
+          ${outerRing}
+          ${segments}
+          ${texts}
+        </svg>
+        <div class="wheel-center-btn">🎯</div>
+      </div>
+    `;
+  },
+  
   startDraw() {
     const input = document.getElementById('draw-input').value.trim();
     const names = input.split(/[,，]/).map(n => n.trim()).filter(n => n);
     if (names.length < 2) { this.toast('至少需要2人'); return; }
+    if (names.length > 8) { this.toast('最多支持8人'); return; }
+    
     const stage = document.getElementById('draw-stage');
     const btn = document.getElementById('btn-start-draw');
-    stage.innerHTML = '<div class="draw-name" id="draw-name"></div>';
+    
+    // 创建转盘
+    stage.innerHTML = this.createWheel(names);
     btn.disabled = true;
-    btn.textContent = '🎯 抽签中...';
-    const winner = names[Math.floor(Math.random() * names.length)];
-    let count = 0;
-    const interval = setInterval(() => {
-      document.getElementById('draw-name').textContent = names[Math.floor(Math.random() * names.length)];
-      count++;
-      if (count >= 20) {
-        clearInterval(interval);
-        const el = document.getElementById('draw-name');
-        el.textContent = winner;
-        el.classList.add('winner');
-        stage.innerHTML += '<div class="draw-result">🎉 恭喜被抽中！</div>';
-        btn.disabled = false;
-        btn.textContent = '🎯 重新抽签';
-        btn.onclick = () => {
-          stage.innerHTML = `<textarea class="draw-input" id="draw-input" placeholder="输入玩家名称，用逗号分隔">${input}</textarea>`;
-          btn.textContent = '🎯 开始抽签';
-          btn.onclick = () => this.startDraw();
-        };
-      }
-    }, 100);
+    btn.textContent = '🎯 转动中...';
+    
+    const wheel = document.getElementById('wheel');
+    
+    // 随机选中
+    const winnerIndex = Math.floor(Math.random() * names.length);
+    const winner = names[winnerIndex];
+    
+    // 计算角度
+    const count = names.length;
+    const anglePerSegment = 360 / count;
+    // 第0个扇形的中心在顶部偏右 anglePerSegment/2 度的位置
+    // 要让第 winnerIndex 个扇形的中心对准顶部指针
+    // 需要顺时针旋转：基础圈数 + 让目标扇形到达顶部的角度
+    const baseRotation = 360 * 6; // 转6圈
+    // 目标扇形中心相对于第0个扇形中心的角度差
+    const offsetAngle = winnerIndex * anglePerSegment;
+    // 最终停止角度（顺时针旋转）
+    const stopAngle = baseRotation - offsetAngle + Math.random() * 10 - 5; // 加点随机偏移
+    
+    // 重置并开始旋转
+    wheel.style.transition = 'none';
+    wheel.style.transform = 'rotate(0deg)';
+    wheel.offsetHeight; // 强制重绘
+    wheel.style.transition = 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)';
+    wheel.style.transform = `rotate(${stopAngle}deg)`;
+    
+    setTimeout(() => {
+      stage.innerHTML += `<div class="draw-result">🎉 恭喜 <strong>${winner}</strong> 被抽中！</div>`;
+      btn.disabled = false;
+      btn.textContent = '🎯 再来一次';
+      const self = this;
+      btn.onclick = function() { self.startDraw(); };
+    }, 4500);
   }
 };
 
