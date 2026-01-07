@@ -1218,50 +1218,66 @@ const App = {
     `;
   },
   
+  drawNames: [], // 保存抽签玩家列表
+  
   startDraw() {
-    const input = document.getElementById('draw-input').value.trim();
-    const names = input.split(/[,，]/).map(n => n.trim()).filter(n => n);
+    // 如果有输入框，读取并保存；否则用之前保存的
+    const inputEl = document.getElementById('draw-input');
+    if (inputEl) {
+      const input = inputEl.value.trim();
+      this.drawNames = input.split(/[,，]/).map(n => n.trim()).filter(n => n);
+    }
+    const names = this.drawNames;
+    
     if (names.length < 2) { this.toast('至少需要2人'); return; }
     if (names.length > 8) { this.toast('最多支持8人'); return; }
     
     const stage = document.getElementById('draw-stage');
     const btn = document.getElementById('btn-start-draw');
     
-    // 创建转盘
-    stage.innerHTML = this.createWheel(names);
-    btn.disabled = true;
-    btn.textContent = '🎯 转动中...';
-    
-    const wheel = document.getElementById('wheel');
-    
     // 随机选中
     const winnerIndex = Math.floor(Math.random() * names.length);
     const winner = names[winnerIndex];
     
     // 计算角度
+    // 转盘初始状态：第0个扇形从顶部开始，顺时针排列
+    // 每个扇形占 anglePerSegment 度
+    // 第 i 个扇形的中心位置在 (i * anglePerSegment + anglePerSegment/2) 度
+    // 要让第 winnerIndex 个扇形的中心对准顶部指针（0度位置）
+    // 需要逆时针旋转（负角度）或顺时针旋转 360 - 目标角度
     const count = names.length;
     const anglePerSegment = 360 / count;
-    // 第0个扇形的中心在顶部偏右 anglePerSegment/2 度的位置
-    // 要让第 winnerIndex 个扇形的中心对准顶部指针
-    // 需要顺时针旋转：基础圈数 + 让目标扇形到达顶部的角度
     const baseRotation = 360 * 6; // 转6圈
-    // 目标扇形中心相对于第0个扇形中心的角度差
-    const offsetAngle = winnerIndex * anglePerSegment;
-    // 最终停止角度（顺时针旋转）
-    const stopAngle = baseRotation - offsetAngle + Math.random() * 10 - 5; // 加点随机偏移
+    // 目标扇形中心的初始角度
+    const targetCenter = winnerIndex * anglePerSegment + anglePerSegment / 2;
+    // 需要顺时针旋转的角度，让目标中心到达顶部（0度）
+    const stopAngle = baseRotation + (360 - targetCenter);
     
-    // 重置并开始旋转
+    // 完全重建转盘和结果区域
+    stage.innerHTML = this.createWheel(names) + '<div id="draw-result-area"></div>';
+    btn.disabled = true;
+    btn.textContent = '🎯 转动中...';
+    
+    const wheel = document.getElementById('wheel');
+    
+    // 强制从0度开始
     wheel.style.transition = 'none';
     wheel.style.transform = 'rotate(0deg)';
-    wheel.offsetHeight; // 强制重绘
-    wheel.style.transition = 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)';
-    wheel.style.transform = `rotate(${stopAngle}deg)`;
     
+    // 使用 setTimeout 确保重绘
     setTimeout(() => {
-      stage.innerHTML += `<div class="draw-result">🎉 恭喜 <strong>${winner}</strong> 被抽中！</div>`;
+      wheel.style.transition = 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)';
+      wheel.style.transform = `rotate(${stopAngle}deg)`;
+    }, 20);
+    
+    const self = this;
+    setTimeout(() => {
+      const resultArea = document.getElementById('draw-result-area');
+      if (resultArea) {
+        resultArea.innerHTML = `<div class="draw-result">🎉 恭喜 <strong>${winner}</strong> 被抽中！</div>`;
+      }
       btn.disabled = false;
       btn.textContent = '🎯 再来一次';
-      const self = this;
       btn.onclick = function() { self.startDraw(); };
     }, 4500);
   }
